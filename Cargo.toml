@@ -1,0 +1,9 @@
+[package]
+name = "grust"
+version = "0.1.0"
+authors = ["Francisco Bezzecchi <franbcki@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+ncurses = "*"
+unicode-segmentation = "*"
