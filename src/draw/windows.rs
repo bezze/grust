@@ -2,6 +2,7 @@ use std::char;
 use std::ops::{Add,Sub};
 use std::path::PathBuf;
 use std::fmt::Debug;
+use std::collections::HashMap;
 
 use ncurses::*;
 use unicode_segmentation::UnicodeSegmentation;
@@ -71,16 +72,19 @@ impl Drop for Window {
     }
 }
 
-pub struct SimpleWindow {
+#[derive(Copy,Clone,Debug,PartialEq,Eq,Hash)]
+pub struct WindowId<'a> (&'a str);
+
+pub struct SimpleWindow<'w>{
     w: Window,
     pos: YX,
     size: YX,
-    // subw: Vec<SimpleWindow>
+    subw: HashMap<WindowId<'w>, SimpleWindow<'w>>
 }
 
-impl SimpleWindow {
+impl <'a> SimpleWindow<'a> {
 
-    pub fn init(pos: YX, size: YX, style: Option<(chtype, chtype)>) -> SimpleWindow {
+    pub fn init(pos: YX, size: YX, style: Option<(chtype, chtype)>) -> SimpleWindow<'a> {
         let mut w = Window { w: newwin(size.0, size.1, pos.0, pos.1) };
 
         if let Some((att1, att2)) = style {
@@ -90,10 +94,13 @@ impl SimpleWindow {
             box_(w.w(), 0, 0);
         }
 
+        let subw = HashMap::new();
+
         SimpleWindow {
             w,
             pos,
             size,
+            subw,
         }
     }
 
@@ -147,24 +154,80 @@ impl SimpleWindow {
 
 }
 
-impl NcursesWindow for SimpleWindow {
+pub trait  NcursesWindowParent<'c>: NcursesWindow {
+    type Child: NcursesWindow;
+    fn subwindows(&'c mut self) -> &mut HashMap<WindowId<'c>, Self::Child>;
+    fn subwin<F>(&'c mut self, size: YX, pos: YX, name: &'c str, mut draw: F)
+        where F: FnMut(&mut Self::Child) -> ();
+    fn get(&'c mut self, name: &'c str) -> Option<&Self::Child>;
+    fn get_mut(&'c mut self, name: &'c str) -> Option<&mut Self::Child>;
+
+    fn draw_subwin<F>(&'c mut self, name: &'c str, mut draw: F) -> ()
+        where F: FnMut(&mut Self::Child) -> () {
+            if let Some(child) = self.get_mut(name) {
+                draw(child);
+                child.wrefresh();
+            };
+        }
+
+}
+
+impl <'w> NcursesWindowParent<'w> for SimpleWindow<'w> {
+    type Child = Self;
+
+    fn subwindows(&'w mut self) -> &mut HashMap<WindowId<'w>, SimpleWindow<'w>> { &mut self.subw }
+
+    fn subwin<F>(&'w mut self, size: YX, pos: YX, name: &'w str, mut draw: F)
+        where F: FnMut(&mut Self::Child) -> () {
+        let YX(lines, cols) = size;
+        let YX(y, x) = pos;
+        let sw = Window{ w: subwin(self.window(), lines, cols, y, x) };
+
+        let wid = WindowId(name);
+        let mut sub_window = SimpleWindow {
+            w: sw,
+            pos: pos,
+            size: size,
+            subw: HashMap::new(),
+        };
+
+        draw(&mut sub_window);
+        sub_window.wrefresh();
+
+        self.subwindows().insert(wid, sub_window);
+
+    }
+
+    fn get(&'w mut self, name: &'w str) -> Option<&'w SimpleWindow> {
+        let wid = WindowId(name);
+        self.subwindows().get(&wid)
+    }
+
+    fn get_mut(&'w mut self, name: &'w str) -> Option<&'w mut SimpleWindow> {
+        let wid = WindowId(name);
+        self.subwindows().get_mut(&wid)
+    }
+
+}
+
+impl <'b> NcursesWindow for SimpleWindow<'b> {
     fn window(&mut self) -> WINDOW { self.w.w() }
     fn pos(&mut self) -> YX { self.pos }
     fn size(&mut self) -> YX { self.size }
 }
 
 
-pub struct ScaledWindow {
-    pub sw: SimpleWindow,
+pub struct ScaledWindow<'a> {
+    pub sw: SimpleWindow<'a>,
     vscale: f32,
     voffset: f32,
     hscale: f32,
     hoffset: f32,
 }
 
-impl ScaledWindow {
+impl <'a> ScaledWindow<'a> {
 
-    pub fn new(pos: YX, size: YX, style: Option<(chtype, chtype)>) -> ScaledWindow {
+    pub fn new(pos: YX, size: YX, style: Option<(chtype, chtype)>) -> ScaledWindow<'a> {
         ScaledWindow {
             sw: SimpleWindow::init(pos, size, style),
             vscale: 1.,
@@ -322,17 +385,6 @@ pub trait NcursesWindow {
         mvwin(self.window(), lines, cols);
     }
 
-    fn subwin(&mut self, size: YX, pos: YX) -> SimpleWindow {
-        let YX(lines, cols) = size;
-        let YX(y, x) = pos;
-        let sw = Window{ w: subwin(self.window(), lines, cols, y, x) };
-        SimpleWindow {
-            w: sw,
-            pos: pos,
-            size: size
-        }
-
-    }
 
     fn touchwin(&mut self) {
         touchwin(self.window());

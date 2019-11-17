@@ -7,7 +7,7 @@ pub mod windows;
 pub mod colors;
 
 use windows::{*};
-use windows::NcursesWindow;
+use windows::{NcursesWindow, NcursesWindowParent};
 
 pub type DrawResult = Result<(),DrawError>;
 
@@ -41,7 +41,7 @@ pub fn end_ncurses_mode() {
     endwin();
 }
 
-pub fn main_window() -> ScaledWindow {
+pub fn main_window<'a>() -> ScaledWindow<'a> {
     // This should be a ScaleWindow, a SimpleWindow with additional attributes, like scale,
     // offset, units, tick frequency
     let screen = windows::screen_size();
@@ -55,12 +55,15 @@ pub fn main_window() -> ScaledWindow {
     w
 }
 
-pub fn sub_window(w: &mut SimpleWindow) -> SimpleWindow {
+pub fn create_subwindow<'a>(w: &'a mut SimpleWindow<'a>) { //-> &mut SimpleWindow {
+    w.subwin(YX(10,10), YX(5,5), "Hola", |child| {
+        let style = Style::default();
+        child.wborder(style);
+        child.wrefresh();
+    })
+}
+
+pub fn sub_window<'a>(w: &'a mut SimpleWindow<'a>) { //-> &mut SimpleWindow {
     let screen = windows::screen_size();
-    let mut sw = w.subwin(YX(10,10), YX(5,5));
-    // let style = Style::new(' ','a',' ',' ',' ',' ',' ',' ');
-    let style = Style::default();
-    sw.wborder(style);
-    sw.wrefresh();
-    sw
+    create_subwindow(w);
 }
