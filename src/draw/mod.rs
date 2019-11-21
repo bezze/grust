@@ -41,7 +41,7 @@ pub fn end_ncurses_mode() {
     endwin();
 }
 
-pub fn main_window<'a>() -> ScaledWindow<'a> {
+pub fn main_window<'a>() -> ScaledWindow {
     // This should be a ScaleWindow, a SimpleWindow with additional attributes, like scale,
     // offset, units, tick frequency
     let screen = windows::screen_size();
@@ -55,15 +55,23 @@ pub fn main_window<'a>() -> ScaledWindow<'a> {
     w
 }
 
-pub fn create_subwindow<'a>(w: &'a mut SimpleWindow<'a>) { //-> &mut SimpleWindow {
+pub fn create_subwindow<'a>(w: &'a mut SimpleWindow) { //-> &mut SimpleWindow {
+
     w.subwin(YX(10,10), YX(5,5), "Hola", |child| {
         let style = Style::default();
         child.wborder(style);
         child.wrefresh();
-    })
+    });
+
+    w.subwin(YX(10,10), YX(5,5), "Hola", |child| {
+        let style = Style::default();
+        child.wborder(style);
+        child.wrefresh();
+    });
+
 }
 
-pub fn sub_window<'a>(w: &'a mut SimpleWindow<'a>) { //-> &mut SimpleWindow {
+pub fn sub_window<'a>(w: &'a mut SimpleWindow) { //-> &mut SimpleWindow {
     let screen = windows::screen_size();
     create_subwindow(w);
 }
