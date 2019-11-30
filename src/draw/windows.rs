@@ -173,7 +173,8 @@ impl  SimpleWindow {
 pub trait  NcursesWindowParent<'c>: NcursesWindow {
     type Child: NcursesWindow;
 
-    fn subwindows(&mut self) -> &mut HashMap<WindowId, Self::Child>;
+    fn subwindows(&self) -> &HashMap<WindowId, Self::Child>;
+    fn subwindows_mut(&mut self) -> &mut HashMap<WindowId, Self::Child>;
 
     fn subwin<F>(&'c mut self, size: YX, pos: YX, name: &'c str, mut draw: F)
         where F: FnMut(&mut Self::Child) -> ();
@@ -184,23 +185,54 @@ pub trait  NcursesWindowParent<'c>: NcursesWindow {
 
     fn sub_window<'s>(&mut self, size: YX, pos: YX) -> Self::Child;
 
-    fn draw_subwin<F>(&'c mut self, name: &'c str, mut draw: F) -> ()
+    fn __size_pos(&'c self, name: &'c str) -> Option<(YX,YX)> {
+            let wid = WindowId::from(name);
+            let size_pos = {
+                let sw_map = self.subwindows();
+                if let Some(c) = sw_map.get(&wid) {
+                    let size = c.size();
+                    let pos: YX = c.pos();
+                    Some((size, pos))
+                }
+                else {
+                    None
+                }
+            };
+            size_pos
+    }
+
+    fn draw_subwin<F>(&'c mut self, name: &'c str, draw: F) -> ()
         where F: FnMut(&mut Self::Child) -> () {
             let wid = WindowId::from(name);
 
-            let child = self.subwindows().get(&wid);
-
-            if let Some(ref c) = child {
-                c.size
+            if let Some((size, pos)) = self.__size_pos(name) {
+                let mut sub_window = self.sub_window(size, pos);
+                draw(&mut sub_window);
             }
+
+            // if let Some((size, pos)) = size_pos {
+            // }
+
+            // let sw_map = self.subwindows_mut();
+            // let mut child = sw_map.get_mut(&wid);
+            // if let Some(c) = child.take() {
+            //     let size: YX = c.size();
+            //     let pos: YX = c.pos();
+            //     let mut sub_window = self.sub_window(size, pos);
+            //     draw(&mut sub_window);
+            //     sub_window.wrefresh();
+            //     use std::mem;
+            //     mem::replace(c, sub_window);
+            //     // sw_map.insert(wid, sub_window);
+            // }
 
             // if let Some(child) = self.subwindows().get(&wid).take() {
             //     println!("{:?}", &child.size);
-                // let size = child.size();
-                // let pos = child.pos();
-                // let mut sub_window = self.sub_window();
-                // draw(&mut sub_window);
-                // sub_window.wrefresh();
+            // let size = child.size();
+            // let pos = child.pos();
+            // let mut sub_window = self.sub_window();
+            // draw(&mut sub_window);
+            // sub_window.wrefresh();
             // };
 
         }
@@ -213,9 +245,14 @@ pub trait  NcursesWindowParent<'c>: NcursesWindow {
 impl <'w> NcursesWindowParent<'w> for SimpleWindow {
     type Child = Self;
 
-    fn subwindows(&mut self) -> &mut HashMap<WindowId, SimpleWindow> {
+    fn subwindows(&self) -> &HashMap<WindowId, SimpleWindow> {
+        &self.subw
+    }
+
+    fn subwindows_mut(&mut self) -> &mut HashMap<WindowId, SimpleWindow> {
         &mut self.subw
     }
+
 
     fn sub_window<'s>(&mut self, size: YX, pos: YX) -> SimpleWindow {
         let YX(lines, cols) = size;
@@ -251,7 +288,7 @@ impl <'w> NcursesWindowParent<'w> for SimpleWindow {
 
     fn udpate(&'w mut self, name: &'w str, w: SimpleWindow) {
         let wid = WindowId::from(name);
-        self.subwindows().insert(wid, w);
+        self.subwindows_mut().insert(wid, w);
         // if let Some(ref mut old_window) = self.subwindows().insert(wid, w) {
         //     old_window.wclear()
         // }
@@ -262,8 +299,8 @@ impl <'w> NcursesWindowParent<'w> for SimpleWindow {
 
 impl <'b> NcursesWindow for SimpleWindow {
     fn window(&mut self) -> WINDOW { self.w.w() }
-    fn pos(&mut self) -> YX { self.pos }
-    fn size(&mut self) -> YX { self.size }
+    fn pos(&self) -> YX { self.pos }
+    fn size(&self) -> YX { self.size }
 }
 
 
@@ -319,8 +356,8 @@ impl <'a> ScaledWindow {
 
 pub trait NcursesWindow {
     fn window(&mut self) -> WINDOW;
-    fn pos(&mut self) -> YX;
-    fn size(&mut self) -> YX;
+    fn pos(&self) -> YX;
+    fn size(&self) -> YX;
 
     fn box_(&mut self, att1: chtype, att2: chtype) {
         box_(self.window(), att1, att2);
