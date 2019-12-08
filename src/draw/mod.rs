@@ -7,7 +7,7 @@ pub mod windows;
 pub mod colors;
 
 use windows::{*};
-use windows::{NcursesWindow, NcursesWindowParent};
+// use windows::{NcursesWindow, NcursesWindowParent};
 
 pub type DrawResult = Result<(),DrawError>;
 
@@ -45,25 +45,31 @@ pub fn main_window<'a>() -> ScaledWindow {
     // This should be a ScaleWindow, a SimpleWindow with additional attributes, like scale,
     // offset, units, tick frequency
     let screen = windows::screen_size();
-    let mut w = windows::ScaledWindow::new(YX(0,2), screen - YX(1,2), None);
+    let shape = Shape { pos: YX(0, 2), size: screen - YX(1,2) };
+    let mut w = windows::ScaledWindow::new(shape, None);
     let style = Style::from(0, ' ' as chtype,
                             ' ' as chtype, 0,
                             ' ' as chtype, ' ' as chtype,
                             0, ' ' as chtype);
-    w.sw.wborder(style);
-    w.sw.wrefresh();
+    w.window.wborder(style);
+    w.window.wrefresh();
     w
 }
 
-pub fn create_subwindow<'a>(w: &'a mut SimpleWindow) { //-> &mut SimpleWindow {
+pub fn create_subwindow<'a>(w: &'a mut Window) { //-> &mut SimpleWindow {
 
-    w.subwin(YX(10,10), YX(5,5), "Hola", |child| {
+    let shape = Shape { pos: YX(10, 10), size: YX(5,5) };
+
+    w.subwin(&shape, "Hola");
+    w.draw_sw("Hola", |child| {
         let style = Style::default();
         child.wborder(style);
         child.wrefresh();
     });
 
-    w.subwin(YX(10,10), YX(5,5), "Hola", |child| {
+    let shape = Shape { pos: YX(20, 10), size: YX(10,5) };
+    w.subwin(&shape, "Hola2");
+    w.draw_sw("Hola2", |child| {
         let style = Style::default();
         child.wborder(style);
         child.wrefresh();
@@ -71,7 +77,7 @@ pub fn create_subwindow<'a>(w: &'a mut SimpleWindow) { //-> &mut SimpleWindow {
 
 }
 
-pub fn sub_window<'a>(w: &'a mut SimpleWindow) { //-> &mut SimpleWindow {
+pub fn sub_window<'a>(w: &'a mut Window) { //-> &mut SimpleWindow {
     let screen = windows::screen_size();
     create_subwindow(w);
 }
