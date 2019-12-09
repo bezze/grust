@@ -324,11 +324,15 @@ impl Window {
     pub fn delete_sw(&mut self, id: &str) -> NcResult {
         let wid = WindowId::from(id);
         let wid_position = self.find_layer(id)?;
-        self.child_hash.remove(&wid);
+        if let Some(mut window) = self.child_hash.remove(&wid) {
+            window.wclear()?;
+            window.wrefresh()?;
+            drop(window)
+        }
         self.child_list.remove(wid_position as usize);
-        self.wrefresh()?;
-        self.redrawwin()?;
-        nc_refresh()
+        // self.wrefresh()?;
+        // self.redrawwin()?;
+        self.wrefresh()
     }
 
 }

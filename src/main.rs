@@ -28,5 +28,5 @@ fn main() {
     };
     draw::end_ncurses_mode();
 
-    test_raster()
+    // test_raster()
 }
