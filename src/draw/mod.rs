@@ -56,24 +56,38 @@ pub fn main_window<'a>() -> ScaledWindow {
     w
 }
 
-pub fn create_subwindow<'a>(w: &'a mut Window) { //-> &mut SimpleWindow {
+pub fn create_subwindow<'a>(w: &'a mut Window) -> windows::NcResult { //-> &mut SimpleWindow {
 
     let shape = Shape { pos: YX(10, 10), size: YX(5,5) };
-
-    w.subwin(&shape, "Hola");
-    w.draw_sw("Hola", |child| {
+    w.subwin(&shape, "Win1");
+    w.draw_sw("Win1", |child| {
         let style = Style::default();
-        child.wborder(style);
-        child.wrefresh();
-    });
+        child.wresize(5, 20)?;
+        child.wborder(style)?;
+        child.mvwprintw(YX(1,1), "Win1")
+    })?;
 
-    let shape = Shape { pos: YX(20, 10), size: YX(10,5) };
-    w.subwin(&shape, "Hola2");
-    w.draw_sw("Hola2", |child| {
-        let style = Style::default();
-        child.wborder(style);
-        child.wrefresh();
-    });
+    let shape = Shape { pos: YX(20, 10), size: YX(10,10) };
+    w.subwin(&shape, "Win2");
+    w.draw_sw("Win2", |child| {
+
+        child.mvwprintw(YX(1,1), "Win2")?;
+        child.wnoutrefresh()?;
+
+        child.wresize(15, 40)?;
+        child.wnoutrefresh()?;
+
+        child.mvwin(20, 40)?;
+        child.wnoutrefresh()?;
+
+        child.wborder(Style::default())?;
+        child.wnoutrefresh()
+    })?;
+
+    // let code = w.delete_sw("Win1");
+    // println!("{:?}", code);
+    // code
+    Ok(0)
 
 }
 
