@@ -31,18 +31,27 @@ mod vars {
 
 pub fn interact() -> DrawResult {
 
-    refresh();
+    // refresh();
     let ch = getch() as u8 as char;
     let YX(height, width) = screen_size() - YX(2,0);
 
     match ch {
         'q' => {println!("EXIT"); Err(DrawError::CleanExit)},
+        'w' => {Ok(())},
          _  => {mvprintw(height+1i32,width-20i32, &format!("{:?}\n",ch)); Ok(())},
         // _ => Ok(())
     }
 
 }
 
+pub enum State {
+    Normal
+}
+
+pub struct AppState {
+    pub state: State,
+    pub mainw: Window
+}
 
 #[derive(Debug)]
 pub enum Fun {

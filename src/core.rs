@@ -25,7 +25,7 @@ pub fn draw_interface() -> DrawResult {
     // }
 
     let mut main_w = draw::main_window();
-    draw::sub_window(&mut main_w.sw);
+    draw::sub_window(&mut main_w.window);
     interact()
 
 }

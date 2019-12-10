@@ -59,19 +59,290 @@ impl Sub for YX {
     }
 }
 
+
+#[derive(Copy,Clone,Debug)]
+pub struct Shape {
+    pub size: YX,
+    pub pos: YX
+}
+
+#[derive(Debug)]
+pub enum WindowError {
+    Boxx,
+    WBorder,
+    WClear,
+    WRefresh,
+    WNoutRefresh,
+    RedrawWin,
+    WHline,
+    WVline,
+    MvWHline,
+    MvWVline,
+    MvHline,
+    MvVline,
+    WPrintw,
+    MvWPrintw,
+    WAttrOn,
+    WAttrOff,
+    WResize,
+    MvWin,
+    Touchwin,
+    FindLayer,
+    DeleteSubWin,
+}
+
+#[derive(Debug)]
+pub enum NcError {
+    DrawError(WindowError),
+    Error,
+}
+
+pub type NcResult = Result<i32, NcError>;
+
+fn __call_wrapper(code: i32, error: NcError) -> NcResult {
+    if code < 0 { Err(error) } else { Ok(code) }
+}
+
+pub fn nc_refresh() -> NcResult {
+    __call_wrapper(refresh(), NcError::Error)
+}
+
 pub struct Window {
-    w: WINDOW,
+    main: WINDOW,
+    shape: Shape,
+    child_list: Vec<WindowId>,
+    child_hash: HashMap<WindowId, Window>,
+    id: WindowId,
 }
 
 impl Window {
-    fn w(&mut self) -> WINDOW { self.w }
+
+    pub fn new(shape: Shape, style: Option<(chtype, chtype)>) -> Window {
+
+        let Shape { pos: YX(y, x), size: YX(lines, cols) } = shape;
+
+        let mut w = Window {
+            main: newwin(lines, cols, y, x),
+            shape: shape,
+            child_list: Vec::new(),
+            child_hash: HashMap::new(),
+            id: WindowId::from("main"),
+        };
+
+        if let Some((att1, att2)) = style {
+            w.box_(att1, att2);
+            // box_(w.main, att1, att2);
+        }
+        else {
+            w.box_(0, 0);
+            // box_(w.main, 0, 0);
+        }
+
+        w
+
+    }
+
+    pub fn shape(&self) -> Shape {
+        self.shape
+    }
+
+    fn __call_wrapper(code: i32, error: WindowError) -> NcResult {
+        if code < 0 { Err(NcError::DrawError(error)) } else { Ok(code) }
+    }
+
+    pub fn box_(&mut self, att1: chtype, att2: chtype) -> NcResult {
+        Window::__call_wrapper(box_(self.main, att1, att2), WindowError::Boxx)
+    }
+
+    pub fn wborder(&mut self, style: Style) -> NcResult {
+
+        let Style {
+            ls, rs,
+            ts, bs,
+            tlc, trc,
+            blc, brc,
+        } = style;
+
+        let code = wborder(self.main,
+            ls, rs,
+            ts, bs,
+            tlc, trc,
+            blc, brc,
+        );
+        Window::__call_wrapper(code, WindowError::WBorder)
+    }
+
+    pub fn wclear(&mut self) -> NcResult {
+        Window::__call_wrapper(wclear(self.main), WindowError::WClear)
+    }
+
+    pub fn wrefresh(&mut self) -> NcResult {
+        Window::__call_wrapper(wrefresh(self.main), WindowError::WRefresh)
+    }
+
+    pub fn wnoutrefresh(&mut self) -> NcResult {
+        Window::__call_wrapper(wnoutrefresh(self.main), WindowError::WNoutRefresh)
+    }
+
+    pub fn redrawwin(&mut self) -> NcResult {
+        Window::__call_wrapper(redrawwin(self.main), WindowError::RedrawWin)
+    }
+
+    pub fn whline(&mut self, ch: chtype, n: i32) -> NcResult {
+        Window::__call_wrapper(whline(self.main, ch, n), WindowError::WHline)
+    }
+
+    pub fn wvline(&mut self, ch: chtype, n: i32) -> NcResult {
+        Window::__call_wrapper(wvline(self.main, ch, n), WindowError::WVline)
+    }
+
+    pub fn mvwhline(&mut self, yx: YX, ch: chtype, n: i32) -> NcResult {
+        let YX(y,x) = yx;
+        Window::__call_wrapper(mvwhline(self.main, y, x, ch, n), WindowError::MvWHline)
+    }
+
+    pub fn mvwvline(&mut self, yx: YX, ch: chtype, n: i32) -> NcResult {
+        let YX(y,x) = yx;
+        Window::__call_wrapper(mvwvline(self.main, y, x, ch, n), WindowError::MvWVline)
+    }
+
+    pub fn mvhline(yx: YX, ch: chtype, n: i32) -> NcResult {
+        let YX(y,x) = yx;
+        Window::__call_wrapper(mvhline(y,x,ch,n), WindowError::MvHline)
+    }
+
+    pub fn mvvline(yx: YX, ch: chtype, n: i32) -> NcResult {
+        let YX(y,x) = yx;
+        Window::__call_wrapper(mvvline(y,x,ch,n), WindowError::MvVline)
+    }
+
+    pub fn wprintw(&mut self, s: &str) -> NcResult {
+        Window::__call_wrapper(wprintw(self.main, s), WindowError::WPrintw)
+    }
+
+    pub fn mvwprintw(&mut self, yx: YX, s: &str) -> NcResult {
+        let YX(y,x) = yx;
+        Window::__call_wrapper(mvwprintw(self.main, y, x, s), WindowError::MvWPrintw)
+    }
+
+    // fn split_vline(&mut self, x: i32) {
+    //     let YX(h,w) = self.size();
+    //     let YX(y0,x0) = self.pos();
+    //     self.mvwvline(YX(0,x0+x), ACS_TTEE(), 1);
+    //     self.mvwvline(YX(1,x0+x), 0, h-2);
+    //     self.mvwvline(YX(h-1,x0+x), ACS_BTEE(), 1);
+    // }
+
+    // fn split_hline(&mut self, y: i32) {
+    //     let YX(h,w) = self.size();
+    //     let YX(y0,x0) = self.pos();
+    //     self.mvwhline(YX(y0+y,0), ACS_LTEE(), 1);
+    //     self.mvwhline(YX(y0+y,1), 0, w-2);
+    //     self.mvwhline(YX(y0+y, w-1), ACS_RTEE(), 1);
+    // }
+
+    pub fn wattron(&mut self, color_pair: NCURSES_ATTR_T) -> NcResult {
+        Window::__call_wrapper(wattron(self.main, color_pair), WindowError::WAttrOn)
+    }
+
+    pub fn wattroff(&mut self, color_pair: NCURSES_ATTR_T) -> NcResult {
+        Window::__call_wrapper(wattroff(self.main, color_pair), WindowError::WAttrOff)
+    }
+
+    // fn wattr_set(&mut self, attr: NCURSES_ATTR_T, cpair: NCURSES_ATTR_T) {
+    //     wattr_set(self.main, attr, cpair);
+    // }
+
+    pub fn wresize(&mut self, lines: i32, cols: i32) -> NcResult {
+        let code = wresize(self.main, lines, cols);
+        if code > 0 {
+            self.shape.size = YX(lines, cols);
+        }
+        Window::__call_wrapper(code, WindowError::WResize)
+    }
+
+    pub fn mvwin(&mut self, y: i32, x: i32) -> NcResult {
+        let code = mvwin(self.main, y, x);
+        if code > 0 {
+            self.shape.pos = YX(y, x);
+        }
+        Window::__call_wrapper(code, WindowError::MvWin)
+    }
+
+    pub fn subwin(&mut self, shape: &Shape, id: &str) -> Option<Window> {
+        let Shape { pos: YX(y, x), size: YX(lines, cols) } = shape;
+        let wid = WindowId::from(id);
+        let sw = Window{
+            main: subwin(self.main, *lines, *cols, *y, *x),
+            shape: shape.clone(),
+            child_list: Vec::new(),
+            child_hash: HashMap::new(),
+            id: wid.clone(),
+        };
+        self.child_list.push(wid.clone());
+        self.child_hash.insert(wid, sw)
+    }
+
+    pub fn draw_<F>(&mut self, mut draw: F) -> NcResult
+    where F: FnMut(&mut Window) -> NcResult
+    {
+        self.wclear()?;
+        draw(self)?;
+        self.wrefresh()
+    }
+
+    pub fn draw_sw<F>(&mut self, id: &str, draw: F) -> NcResult
+        where F: FnMut(&mut Window) -> NcResult
+        {
+            if let Some(sw) = self.child_hash.get_mut(&WindowId::from(id)) {
+                sw.draw_(draw)?;
+                sw.wrefresh()?;
+                self.touchwin()?;
+                self.wrefresh()
+            }
+            else {
+                Ok(0i32)
+            }
+        }
+
+    fn touchwin(&mut self) -> NcResult {
+        Window::__call_wrapper(touchwin(self.main), WindowError::Touchwin)
+    }
+
+    fn find_layer(&self, id: &str) -> NcResult {
+        let wid = WindowId::from(id);
+        let mut index = Err(NcError::DrawError(WindowError::FindLayer));
+        for (i, window_id) in self.child_list.iter().enumerate() {
+            if *window_id == wid {
+                // This is a bad idea that will eventually bite me in the ass
+                index = Ok(i as i32)
+            }
+        }
+        index
+    }
+
+    pub fn delete_sw(&mut self, id: &str) -> NcResult {
+        let wid = WindowId::from(id);
+        let wid_position = self.find_layer(id)?;
+        if let Some(mut window) = self.child_hash.remove(&wid) {
+            window.wclear()?;
+            window.wrefresh()?;
+            drop(window)
+        }
+        self.child_list.remove(wid_position as usize);
+        // self.wrefresh()?;
+        // self.redrawwin()?;
+        self.wrefresh()
+    }
+
 }
 
 impl Drop for Window {
     fn drop(&mut self) {
-        delwin(self.w);
+        delwin(self.main);
     }
 }
+
 
 #[derive(Clone,Debug,PartialEq,Eq,Hash)]
 pub struct WindowId (String);
@@ -82,230 +353,9 @@ impl WindowId {
     }
 }
 
-pub struct SimpleWindow {
-    w: Window,
-    pos: YX,
-    size: YX,
-    subw: HashMap<WindowId, SimpleWindow>
-}
-
-impl  SimpleWindow {
-
-    pub fn init(pos: YX, size: YX, style: Option<(chtype, chtype)>) -> SimpleWindow {
-        let mut w = Window { w: newwin(size.0, size.1, pos.0, pos.1) };
-
-        if let Some((att1, att2)) = style {
-            box_(w.w(), att1, att2);
-        }
-        else {
-            box_(w.w(), 0, 0);
-        }
-
-        let subw = HashMap::new();
-
-        SimpleWindow {
-            w,
-            pos,
-            size,
-            subw,
-        }
-    }
-
-    pub fn pos(&self) -> &YX {
-        &self.pos
-    }
-
-    pub fn size(&self) -> YX {
-        self.size.clone()
-    }
-
-
-    pub fn reshape(&mut self, pos: YX, size: YX) {
-        self.pos = pos;
-        self.size = size;
-        // We clear the borders
-        self.box_(NCURSES_ACS(' '), NCURSES_ACS(' '));
-        // Resize them
-        self.wresize(size.0, size.1);
-        // Move them
-        self.mvwin(pos.0, pos.1);
-        // Write them again
-        self.box_(0, 0);
-    }
-
-    pub fn write_text(&mut self, i: i32, text: &str, color: NCURSES_ATTR_T) {
-
-        // Aux data
-        let yx0 = self.pos;// + YX(0i32, 2i32);
-        let yxS = self.size;// + YX(0i32, 2i32);
-
-        // truncate text
-        let truncname = truncate(&text.to_string(), yxS.1 as usize -2);
-
-        // Write directories
-        self.wattron(color);
-        self.mvwprintw(YX(i,1), &truncname);
-        self.wattroff(color);
-        // self.mvwprintw(YX(1,1), &format!("{:?}", yx0));
-    }
-
-    pub fn clean(&mut self) {
-
-        // Aux data
-        let yx_size = self.size;// + YX(0i32, 2i32);
-
-        // Construct empty line
-        let mut string = String::new();
-        for _i in 1..yx_size.1-1 {
-            string.push_str(" ")
-        }
-
-        // Write every line
-        for i in 1..yx_size.0-1 {
-            self.mvwprintw(YX(i,1), &string);
-        }
-
-    }
-
-
-}
-
-pub trait  NcursesWindowParent<'c>: NcursesWindow {
-    type Child: NcursesWindow;
-
-    fn subwindows(&self) -> &HashMap<WindowId, Self::Child>;
-    fn subwindows_mut(&mut self) -> &mut HashMap<WindowId, Self::Child>;
-
-    fn subwin<F>(&'c mut self, size: YX, pos: YX, name: &'c str, mut draw: F)
-        where F: FnMut(&mut Self::Child) -> ();
-
-    // fn get(&'c mut self, name: &'c str) -> Option<&Self::Child>;
-    //
-    // fn get_mut(&'c mut self, name: &'c str) -> Option<&mut Self::Child>;
-
-    fn sub_window<'s>(&mut self, size: YX, pos: YX) -> Self::Child;
-
-    fn __size_pos(&'c self, name: &'c str) -> Option<(YX,YX)> {
-            let wid = WindowId::from(name);
-            let size_pos = {
-                let sw_map = self.subwindows();
-                if let Some(c) = sw_map.get(&wid) {
-                    let size = c.size();
-                    let pos: YX = c.pos();
-                    Some((size, pos))
-                }
-                else {
-                    None
-                }
-            };
-            size_pos
-    }
-
-    fn draw_subwin<F>(&'c mut self, name: &'c str, draw: F) -> ()
-        where F: FnMut(&mut Self::Child) -> () {
-            let wid = WindowId::from(name);
-
-            if let Some((size, pos)) = self.__size_pos(name) {
-                let mut sub_window = self.sub_window(size, pos);
-                draw(&mut sub_window);
-            }
-
-            // if let Some((size, pos)) = size_pos {
-            // }
-
-            // let sw_map = self.subwindows_mut();
-            // let mut child = sw_map.get_mut(&wid);
-            // if let Some(c) = child.take() {
-            //     let size: YX = c.size();
-            //     let pos: YX = c.pos();
-            //     let mut sub_window = self.sub_window(size, pos);
-            //     draw(&mut sub_window);
-            //     sub_window.wrefresh();
-            //     use std::mem;
-            //     mem::replace(c, sub_window);
-            //     // sw_map.insert(wid, sub_window);
-            // }
-
-            // if let Some(child) = self.subwindows().get(&wid).take() {
-            //     println!("{:?}", &child.size);
-            // let size = child.size();
-            // let pos = child.pos();
-            // let mut sub_window = self.sub_window();
-            // draw(&mut sub_window);
-            // sub_window.wrefresh();
-            // };
-
-        }
-
-    fn udpate(&'c mut self, name: &'c str, w: SimpleWindow);
-
-}
-
-
-impl <'w> NcursesWindowParent<'w> for SimpleWindow {
-    type Child = Self;
-
-    fn subwindows(&self) -> &HashMap<WindowId, SimpleWindow> {
-        &self.subw
-    }
-
-    fn subwindows_mut(&mut self) -> &mut HashMap<WindowId, SimpleWindow> {
-        &mut self.subw
-    }
-
-
-    fn sub_window<'s>(&mut self, size: YX, pos: YX) -> SimpleWindow {
-        let YX(lines, cols) = size;
-        let YX(y, x) = pos;
-
-        let sw = Window{ w: subwin(self.window(), lines, cols, y, x) };
-
-        let sub_window = SimpleWindow {
-            w: sw,
-            pos: pos,
-            size: size,
-            subw: HashMap::new(),
-        };
-
-        sub_window
-
-    }
-
-    fn subwin<F>(&'w mut self, size: YX, pos: YX, name: &'w str, mut draw: F)
-        where F: FnMut(&mut Self::Child) -> () {
-
-        let mut sub_window = self.sub_window(size, pos);
-        let wid = WindowId::from(name);
-        draw(&mut sub_window);
-        sub_window.wrefresh();
-        self.udpate(name, sub_window);
-
-        // let hmap = self.subwindows();
-
-        // self.subwindows().insert(wid, sub_window);
-
-    }
-
-    fn udpate(&'w mut self, name: &'w str, w: SimpleWindow) {
-        let wid = WindowId::from(name);
-        self.subwindows_mut().insert(wid, w);
-        // if let Some(ref mut old_window) = self.subwindows().insert(wid, w) {
-        //     old_window.wclear()
-        // }
-    }
-
-
-}
-
-impl <'b> NcursesWindow for SimpleWindow {
-    fn window(&mut self) -> WINDOW { self.w.w() }
-    fn pos(&self) -> YX { self.pos }
-    fn size(&self) -> YX { self.size }
-}
-
 
 pub struct ScaledWindow {
-    pub sw: SimpleWindow,
+    pub window: Window,
     vscale: f32,
     voffset: f32,
     hscale: f32,
@@ -314,9 +364,10 @@ pub struct ScaledWindow {
 
 impl <'a> ScaledWindow {
 
-    pub fn new(pos: YX, size: YX, style: Option<(chtype, chtype)>) -> ScaledWindow {
+    pub fn new(shape: Shape, style: Option<(chtype, chtype)>) -> ScaledWindow {
+
         ScaledWindow {
-            sw: SimpleWindow::init(pos, size, style),
+            window: Window::new(shape, style),
             vscale: 1.,
             voffset: 0.,
             hscale: 1.,
